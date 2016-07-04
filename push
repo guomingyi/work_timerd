@@ -6,7 +6,7 @@ git add .;
 
 git commit -am "<$1>";
 
-git remote add origin https://github.com/guomingyi/fury.git
+git remote add origin https://github.com/guomingyi/work_timerd.git
 
 git pull origin master;   
 

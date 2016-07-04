@@ -1,0 +1,37 @@
+# 
+用法：
+
+1、配置:
+打开my-task.sh脚本配置相关信息，例如：
+build_prj=v3991
+build_type=userdebug
+prj_path=/home/android/work/prj/3991/debug/
+TIMER_SET=14:00
+如果想编译多个项目直接在脚本后面增加即可。
+
+2、编译程序：
+make;
+
+
+3、启动程序:
+./work_timerd
+
+无参数时默认取my-task.sh中设置的时间TIMER_SET的值.
+带参数传入以传入参数时间为准：
+
+./work_timerd 23:00
+
+
+4、关闭程序：
+./work-timer -c
+
+
+
+
+
+
+
+
+
+
+
