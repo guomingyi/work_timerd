@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# ./push "xxx"
+
+git add .;
+
+git commit -am "<$1>";
+
+git remote add origin https://github.com/guomingyi/fury.git
+
+git pull origin master;   
+
+git push -u origin master;
+
+
+exit 0
+
+
+
+
+
+
+
+
+
