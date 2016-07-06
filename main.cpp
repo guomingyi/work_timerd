@@ -23,6 +23,8 @@ DEPSFLAGS := -lpthread
 #define MAXLEN 2048
 #define BUF_LEN 200
 
+#define LOG_OUT_DIR (char *)"/home/android/build-log"
+
 #define GET_TIME_SET(x) \
 do { \
 	char buf[10] = {0}; \
@@ -153,14 +155,6 @@ static void *work_main_thread(void *args)
     for(;;) {
 		
 		getLocalTime(&y,&mon,&d,&h,&m,&s);
-		memset(console,0,sizeof(console));
-        sprintf(console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } >>%s-%s.log", 
-			y, mon, d, h, m, s,mHour,mMin,build_prj,build_type);
-		
-		if(!is_daemon) {
-			printf("%s\n", console);
-		}
-
 		if(time_out_flag == 0 && h == mHour && m >= mMin) {
 			time_out_flag = 1;
 			go_go_go(0);
@@ -173,7 +167,7 @@ static void *work_main_thread(void *args)
 				j = 0;
 				if(is_daemon) {
 					memset(console,0,sizeof(console));
-					sprintf(console,"echo update-parse_config >> %s-%s.log",build_prj,build_type);
+					sprintf(console,"echo update-parse_config >> %s/%s-%s.log",LOG_OUT_DIR,build_prj,build_type);
 					system(console);
 				}
 				parse_config(); //update config.
@@ -181,8 +175,16 @@ static void *work_main_thread(void *args)
 			}		
 		}
 		else {
+			memset(console,0,sizeof(console));
+		    sprintf(console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } >>%s/%s-%s.log", 
+				y, mon, d, h, m, s,mHour,mMin,LOG_OUT_DIR,build_prj,build_type);
+
 			if(is_daemon) {
 				system(console);
+			}
+			else
+			{
+				printf("%s\n", console);
 			}
 		}
 	}
@@ -339,6 +341,7 @@ static void signal_handler(int sig) {
 int parse_args(int argc, char **argv) {
 	if(argc == 2 && strcmp(argv[1],"-c") == 0) {
 		kill_proc((char*)"work_timerd");
+        kill_proc((char*)"make");
 		return 1;
 	}
 	else

@@ -26,11 +26,13 @@ if [ ! -d $root_dir/build-log ] ; then
 fi
 
 rm -rf $root_dir/build-log/everyday-build-$build_prj-$build_type.log 
-rm -rf $root_dir/build-log/$build_prj-$build_type.log.txt
+rm -rf $root_dir/build-log/$build_prj-$build_type.log
 
-echo "start repo sync & build-$build_prj" >> $root_dir/build-log/$build_prj-$build_type.log.txt
+echo "start repo sync & build-$build_prj" >> $root_dir/build-log/$build_prj-$build_type.log
 echo "$build_prj | $build_type |$prj_path" >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 echo ""
+
+#exit 0
 
 cd $prj_path
 repo sync -j4 2>&1 |tee $root_dir/build-log/everyday-build-$build_prj-$build_type.log
@@ -43,7 +45,7 @@ lunch full_$build_prj-$build_type >> $root_dir/build-log/everyday-build-$build_p
 echo ""
 echo "start make... " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 
-make clean;
+#make clean;
 
 make -j8 2>&1 |tee build.log;
 
@@ -52,5 +54,5 @@ echo "start release.sh... " >> $root_dir/build-log/everyday-build-$build_prj-$bu
 $root_dir/work/script/release.sh >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 ###############################################################
 
-exit 0;
+
 
