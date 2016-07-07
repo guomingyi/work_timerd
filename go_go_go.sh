@@ -5,15 +5,11 @@
 #
 # default config.
 #
-# ./work_timerd  debug  prj-name  build-type  prj-path  timer-set
+# ./work_timerd  -d  -p prj-name  -b build-type  -r prj-path  -t timer-set &
 #
 
-#./work_timerd $1 p4661 userdebug /home/android/work/prj/3991/debug/ 09:49
+./work_timerd $1 -p v3991 -b userdebug -r /home/android/work/prj/3991/debug/ -t 13:30 &
 
-./work_timerd $1 v3991 userdebug /home/android/work/prj/3991/debug/ 15:15
+sleep 1
 
-./work_timerd $1 v3991 user /home/android/work/prj/3991/master/ 15:17
-
-
-
-
+./work_timerd $1 -p v3991 -b user -r /home/android/work/prj/3991/master/ -t 14:30 &

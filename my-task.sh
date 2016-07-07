@@ -28,30 +28,25 @@ fi
 rm -rf $root_dir/build-log/everyday-build-$build_prj-$build_type.log 
 rm -rf $root_dir/build-log/$build_prj-$build_type.log
 
-echo "start repo sync & build-$build_prj" >> $root_dir/build-log/$build_prj-$build_type.log
 echo "$build_prj | $build_type |$prj_path" >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
-echo ""
 
 #exit 0
 
 cd $prj_path
-repo sync -j4 2>&1 |tee $root_dir/build-log/everyday-build-$build_prj-$build_type.log
-cd baseline;
+repo sync -j4 2>&1 |tee $root_dir/build-log/everyday-build-$build_prj-$build_type.log &&
+cd baseline &&
 
-source build/envsetup.sh ;
-source mbldenv.sh;
-lunch full_$build_prj-$build_type >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
+source build/envsetup.sh &&
+source mbldenv.sh &&
+lunch full_$build_prj-$build_type >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log &&
 
-echo ""
-echo "start make... " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
+echo "start make... " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log &&
 
-#make clean;
+make clean &&
 
-make -j8 2>&1 |tee build.log;
-
-echo ""
-echo "start release.sh... " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
-$root_dir/work/script/release.sh >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
+make -j8 2>&1 |tee build.log && 
+$root_dir/work/script/release.sh &&
+echo "--end-- " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 ###############################################################
 
 

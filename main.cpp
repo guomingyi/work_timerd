@@ -19,13 +19,12 @@ DEPSFLAGS := -lpthread
 
 */
 
-#define EXEC_PATH_LEN sizeof(exec_script_path) 
 #define MAXLEN 2048
 #define BUF_LEN 200
 
 #define LOG_OUT_DIR (char *)"/home/android/build-log"
 
-#define GET_TIME_SET(x) \
+#define GET_TIME_SET(x,h,m) \
 do { \
 	char buf[10] = {0}; \
 	char *p = argv[x]; \
@@ -36,68 +35,52 @@ do { \
 		} \
 		p++; \
 	} \
-	mHour = atoi(buf)/100; \
-	mMin = atoi(buf)%100; \
+	*h = atoi(buf)/100; \
+	*m = atoi(buf)%100; \
 } while(0)
 
 
-#define SET_DAEMON(x) \
+#define SET_DAEMON(x,d) \
 do { \
-	is_daemon = x; \
+	*d = x; \
 	if(x) { \
 		printf("\nDaemon mode,background runing\n"); \
 	} \
-	else { \
-		printf("\nset as debug mode\n"); \
-	} \
-} while(0)
-
-#define SET_BUF_CLEAN() \
-do { \
-	memset(build_prj,0,sizeof(build_prj)); \
-	memset(build_type,0,sizeof(build_type)); \
-	memset(prj_path,0,sizeof(prj_path)); \
-} while(0)
-
-
-#define SET_PROJECT(x) \
-do { \
-	SET_BUF_CLEAN();\
-	strcpy(build_prj,argv[x]); \
-	strcpy(build_type,argv[x+1]); \
-	strcpy(prj_path,argv[x+1+1]); \
-	printf("\n\n%s,%s,%s\n\n",build_prj,build_type,prj_path); \
 } while(0)
 
 
 #define SHOW_HELP() \
 do { \
 	printf("\n\n--help :\n");\
-	printf("\n ./work-timer  - use default my-task.sh config\n");\
-	printf("\n ./work-timer -d  - as debug mode run. \n");\
-	printf("\n ./work-timer 23:00  - set timer as daemon run, use default my-task.sh config \n");\
-	printf("\n ./work-timer v3991 user /home/android/work/prj/3991/debug/ 23:00  - ext.\n");\
-	printf("\n ./work-timer -d v3991 user /home/android/work/prj/3991/debug/ 23:00  - ext. debug.\n");\
+	printf("\n ./work-timer -c  - kill proc\n");\
+	printf("\n ./work_timerd -d -p v3991 -b userdebug -r /home/android/work/prj/3991/debug/ -t 09:58 & \n");\
 	printf("\n--end \n");\
 } while(0)
 
-int exec_system_call(char *cmd,char *ret, int len);
-void parse_config(void);
-void log(char *info);
-
+static int exec_system_call(char *cmd,char *ret, int len);
+static void parse_config(void);
+static void log(char *info);
+static void daemon_mode(void);
+static int kill_proc(char *proc);
+static void signal_handler(int sig);
 
 pthread_t work_thd;
-int time_out_flag = 0;
-int mHour = 0;
-int mMin = 0;
-char exec_script_path[MAXLEN/2];
-char console[MAXLEN/2] = {0};
-int is_daemon = 1;
 
+typedef struct Project_info {
+	int h;
+	int m;
+	int is_daemon;
+	int time_out;
+	char prj_name[20];
+	char build_type[20];
+	char script[BUF_LEN];
+	char pwd[BUF_LEN];
+	char prj_path[BUF_LEN];
+	char console[BUF_LEN];
+};
 
-char build_prj[BUF_LEN];
-char build_type[BUF_LEN];
-char prj_path[BUF_LEN];
+static Project_info mProject_info;
+static Project_info *mPrj = &mProject_info;
 
 void getLocalTime(int *y,int *mon, int *d, int *h, int *m, int *s) {
 	time_t timep;
@@ -116,18 +99,26 @@ void getLocalTime(int *y,int *mon, int *d, int *h, int *m, int *s) {
 
 void* (*timeout_fun_ptr) (void *) = NULL;  
 
-static void timeout_work() {
+//printf("\n\n%d,%s,%s,%s,%s,%02d:%02d,\n\n",
+//	mPrj->is_daemon,mPrj->prj_name,mPrj->build_type,mPrj->prj_path,mPrj->script,mPrj->h,mPrj->m);
+
+static void go_go_go(int do_what) {
     char exec[100] = {0};
-	//int ret = 0;
 	
-	if(strlen(build_prj) > 0 
-		&& strlen(build_type) > 0 
-		&& strlen(prj_path) > 0) {
-		sprintf(exec, "%s %s %s %s %02d:%02d &",
-			exec_script_path,build_prj,build_type,prj_path,mHour,mMin);
+	if(strlen(mPrj->prj_name) > 0 
+		&& strlen(mPrj->build_type) > 0 
+		&& strlen(mPrj->prj_path) > 0) {
+		sprintf(exec, "%s %s %s %s ",
+			mPrj->script,mPrj->prj_name,mPrj->build_type,mPrj->prj_path);
 	}
 	else {
-		sprintf(exec, "%s &",exec_script_path);
+		sprintf(exec, "%s ",mPrj->script);
+	}
+
+	if(mPrj->is_daemon) {
+		memset(mPrj->console,0,BUF_LEN);
+		sprintf(mPrj->console,"echo exec : %s start! >> %s/%s-%s.log",exec,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+		system(mPrj->console);
 	}
 
 	if(system(exec) > 0) {
@@ -135,14 +126,15 @@ static void timeout_work() {
 		return;
     }
 
-    //printf("###exec : %s\n",exec);
-}
+	if(mPrj->is_daemon) {
+		memset(mPrj->console,0,BUF_LEN);
+		sprintf(mPrj->console,"echo exec : %s success! >> %s/%s-%s.log",exec,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+		system(mPrj->console);
+	}
+	else {
+		printf("exec : %s success!\n", exec);
+	}
 
-
-static void go_go_go(int do_what) {
-	if(do_what == 0) {
-		timeout_work();
-    }
 }
 
 
@@ -152,41 +144,47 @@ static void *work_main_thread(void *args)
 	int h, m, s;
 	int i = 0, j = 0;
 
-    for(;;) {
-		
+    for(;;) 
+	{
 		getLocalTime(&y,&mon,&d,&h,&m,&s);
-		if(time_out_flag == 0 && h == mHour && m >= mMin) {
-			time_out_flag = 1;
-			go_go_go(0);
-		}
 
-        sleep(10);// 10 s
 		if(++i >= 60) { //10 min
 			i = 0;
 			if(++j >= 6*2) { //120 min
 				j = 0;
-				if(is_daemon) {
-					memset(console,0,sizeof(console));
-					sprintf(console,"echo update-parse_config >> %s/%s-%s.log",LOG_OUT_DIR,build_prj,build_type);
-					system(console);
-				}
+
 				parse_config(); //update config.
-				time_out_flag = 0;
+
+				memset(mPrj->console,0,BUF_LEN);
+				sprintf(mPrj->console,"echo update-parse_config >> %s/%s-%s.log",LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+				system(mPrj->console);
+				
+				//reset
+				if(mPrj->time_out) {
+					mPrj->time_out = 0;
+				}
 			}		
 		}
 		else {
-			memset(console,0,sizeof(console));
-		    sprintf(console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } >>%s/%s-%s.log", 
-				y, mon, d, h, m, s,mHour,mMin,LOG_OUT_DIR,build_prj,build_type);
+			memset(mPrj->console,0,BUF_LEN);
+		    sprintf(mPrj->console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } >>%s/%s-%s.log", 
+				y, mon, d, h, m, s,mPrj->h,mPrj->m,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
 
-			if(is_daemon) {
-				system(console);
+			if(mPrj->is_daemon) {
+				system(mPrj->console);
 			}
-			else
-			{
-				printf("%s\n", console);
+			else {
+				printf("%s\n", mPrj->console);
 			}
 		}
+
+		if(mPrj->time_out == 0 && h == mPrj->h && m >= mPrj->m) {
+			mPrj->time_out = 1;
+			go_go_go(0);
+		}
+
+		// 10 s
+		sleep(10);
 	}
 
 	return NULL;
@@ -262,20 +260,91 @@ int parse_from_file(char *filename,int *hh, int *mm) {
 }
 
 void parse_config(void) {
-    char *p = exec_script_path;
+    char *p = mPrj->pwd;
+	exec_system_call((char *)"pwd",p,BUF_LEN);
+	sprintf(mPrj->script,"%s/my-task.sh",p);
+    printf("wait exec: %s\n",mPrj->script);
+    parse_from_file(mPrj->script, &mPrj->h,&mPrj->m);
+}
 
-    memset(p,0,EXEC_PATH_LEN);
-	exec_system_call((char *)"pwd",p,EXEC_PATH_LEN);
-	sprintf(p,"%s/my-task.sh",p);
-    printf("wait exec: %s\n",p);
-    parse_from_file(p, &mHour,&mMin);
+
+int parse_args(int argc, char **argv) {
+	int i;
+
+	memset(mPrj,0,sizeof(Project_info));
+	parse_config();
+
+	for(i = 0; i < argc; i++) {
+		if(strcmp(argv[i],"-c") == 0) {
+			kill_proc((char*)"work_timerd");
+		}
+		else
+		if(strcmp(argv[i],"-h") == 0) {
+			SHOW_HELP();
+		}
+		else
+		if(strcmp(argv[i],"-d") == 0) {
+			SET_DAEMON(1,&mPrj->is_daemon);
+		}
+		else
+		if(strcmp(argv[i],"-p") == 0) {
+			strcpy(mPrj->prj_name,argv[i+1]); 
+		}
+		else
+		if(strcmp(argv[i],"-b") == 0) {
+			strcpy(mPrj->build_type,argv[i+1]); 
+		}
+		else
+		if(strcmp(argv[i],"-r") == 0) {
+			strcpy(mPrj->prj_path,argv[i+1]); 
+		}
+		else
+		if(strcmp(argv[i],"-t") == 0) {
+			GET_TIME_SET(i+1,&mPrj->h,&mPrj->m);
+		}
+	}
+
+	return 0;
+}
+
+
+int main(int argc,char *argv[])
+{
+	if(parse_args(argc,argv) > 0) {
+		return 1;
+	}
+
+	if(!(mPrj->h >= 0 && mPrj->h <= 23) || !(mPrj->m >= 0 && mPrj->m <= 59)) {
+        printf("time input format err - %02d:%02d\n", mPrj->h, mPrj->m);
+		exit(0);
+		return -1;
+	}
+
+	printf("init : \n\n%d,%s,%s,%s,%s,%02d:%02d,\n\n",
+		mPrj->is_daemon,
+		mPrj->prj_name,
+		mPrj->build_type,
+		mPrj->prj_path,
+		mPrj->script,
+		mPrj->h,
+		mPrj->m);
+
+	if(mPrj->is_daemon) {
+		daemon_mode();
+	}
+	else {
+		signal(SIGINT, signal_handler); //Ctrl+C
+		signal(SIGTSTP, signal_handler); //Ctrl+Z
+	}
+
+	pthread_create(&work_thd, NULL, work_main_thread, NULL);
+    pthread_join(work_thd, NULL); 
+	return EXIT_SUCCESS;
 }
 
 void daemon_mode(void)
 {
     int fr = 0;
-
-	//printf("\n\n%s\n\n", __func__);
 
     fr = fork();
     if(fr < 0) {
@@ -320,11 +389,11 @@ void daemon_mode(void)
 }
 
 int kill_proc(char *proc) {
-    char p[EXEC_PATH_LEN];
+    char p[BUF_LEN];
 
-    memset(p,0,EXEC_PATH_LEN);
-	exec_system_call((char *)"pwd",p,EXEC_PATH_LEN);
-	sprintf(p,"%s/stop.sh %s", p, proc);
+	printf("\n\n%s: %s\n\n", __func__, proc);
+    memset(p,0,BUF_LEN);
+	sprintf(p,"%s/stop.sh %s", mPrj->pwd, proc);
 	if(system(p) < 0) {
 		printf("kill : %s fail!\n",p);
 		return -1;
@@ -335,91 +404,7 @@ int kill_proc(char *proc) {
 
 static void signal_handler(int sig) {
 	printf("\n\n%s: %d\n\n", __func__, sig);
+    kill_proc((char*)"work_timerd");
 	exit(0);
 }
-
-int parse_args(int argc, char **argv) {
-	if(argc == 2 && strcmp(argv[1],"-c") == 0) {
-		kill_proc((char*)"work_timerd");
-        kill_proc((char*)"make");
-		return 1;
-	}
-	else
-	if(argc == 2 && strcmp(argv[1],"-h") == 0) {
-		SHOW_HELP();
-		return 1;
-	}
-
-	parse_config();
-    SET_BUF_CLEAN();
-
-	switch(argc) {
-		case 2: { /* ./work-timer -d ,show run debug info. */
-			if(strcmp(argv[1],"-d") == 0) { 
-				SET_DAEMON(0);
-			}
-			else { /* ./work-timer 23:00 */
-				GET_TIME_SET(1);
-				SET_DAEMON(1);
-			}
-		}
-		break;
-		case 3: { /* ./work-timer -d 23:00 */
-			SET_DAEMON(0);
-			GET_TIME_SET(2);
-		}
-		break;
-		case 5: { /* ./work-timer v3991 user /home/android/work/prj/3991/debug/ 23:00 */
-			SET_PROJECT(1);
-			GET_TIME_SET(4);
-			SET_DAEMON(1);
-		}
-		break;
-		case 6: { /* ./work-timer -d v3991 user /home/android/work/prj/3991/debug/ 23:00 */
-			if(strcmp(argv[1],"-d") == 0) {
-				SET_DAEMON(0);
-			}
-			SET_PROJECT(2);
-			GET_TIME_SET(5);
-		}
-		break;
-		default: { /* ./work-timer */
-			SET_DAEMON(1);
-		}
-		break;
-	}
-
-	return 0;
-}
-
-
-int main(int argc,char *argv[])
-{
-	int ret = parse_args(argc,argv);
-	if(ret > 0) {
-		exit(0);
-		return 1;
-	}
-
-	if(!(mHour >= 0 && mHour <= 23) || !(mMin >= 0 && mMin <= 59)) {
-        printf("time input format err - %02d:%02d\n", mHour, mMin);
-		exit(0);
-		return -1;
-	}
-
-	printf("Timer set - %02d:%02d\n", mHour, mMin);
-
-	if(is_daemon) {
-		daemon_mode();
-	}
-	else {
-		signal(SIGINT, signal_handler); //Ctrl+C
-		signal(SIGTSTP, signal_handler); //Ctrl+Z
-	}
-
-	pthread_create(&work_thd, NULL, work_main_thread, NULL);
-    pthread_join(work_thd, NULL); 
-	return EXIT_SUCCESS;
-}
-
 
