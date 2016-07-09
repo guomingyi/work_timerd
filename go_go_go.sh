@@ -8,8 +8,15 @@
 # ./work_timerd  -d  -p prj-name  -b build-type  -r prj-path  -t timer-set &
 #
 
-./work_timerd $1 -p v3991 -b userdebug -r /home/android/work/prj/3991/debug/ -t 13:30 &
+./stop.sh
+sleep 1
+
+./work_timerd $1 -p v3991 -b userdebug -r /home/android/work/prj/3991/debug/ -t 23:00 &
 
 sleep 1
 
-./work_timerd $1 -p v3991 -b user -r /home/android/work/prj/3991/master/ -t 14:30 &
+./work_timerd $1 -p v3991 -b user -r /home/android/work/prj/3991/master/ -t 03:00 &
+
+sleep 1
+
+

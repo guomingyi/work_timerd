@@ -58,7 +58,7 @@ do { \
 } while(0)
 
 static int exec_system_call(char *cmd,char *ret, int len);
-static void parse_config(void);
+
 static void log(char *info);
 static void daemon_mode(void);
 static int kill_proc(char *proc);
@@ -99,30 +99,28 @@ void getLocalTime(int *y,int *mon, int *d, int *h, int *m, int *s) {
 
 void* (*timeout_fun_ptr) (void *) = NULL;  
 
-//printf("\n\n%d,%s,%s,%s,%s,%02d:%02d,\n\n",
-//	mPrj->is_daemon,mPrj->prj_name,mPrj->build_type,mPrj->prj_path,mPrj->script,mPrj->h,mPrj->m);
 
 static void go_go_go(int do_what) {
-    char exec[100] = {0};
-	
-	if(strlen(mPrj->prj_name) > 0 
-		&& strlen(mPrj->build_type) > 0 
-		&& strlen(mPrj->prj_path) > 0) {
-		sprintf(exec, "%s %s %s %s ",
-			mPrj->script,mPrj->prj_name,mPrj->build_type,mPrj->prj_path);
-	}
-	else {
-		sprintf(exec, "%s ",mPrj->script);
-	}
+    char *exec = mPrj->script;
 
 	if(mPrj->is_daemon) {
 		memset(mPrj->console,0,BUF_LEN);
 		sprintf(mPrj->console,"echo exec : %s start! >> %s/%s-%s.log",exec,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
 		system(mPrj->console);
 	}
+	else {
+		printf("exec : %s start!\n", exec);
+	}
 
 	if(system(exec) > 0) {
-        printf("exec : %s fail!\n", exec);
+		if(mPrj->is_daemon) {
+			memset(mPrj->console,0,BUF_LEN);
+			sprintf(mPrj->console,"echo exec : %s fail! >> %s/%s-%s.log",exec,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+			system(mPrj->console);
+		}
+		else {
+			printf("exec : %s fail!\n", exec);
+		}
 		return;
     }
 
@@ -144,6 +142,10 @@ static void *work_main_thread(void *args)
 	int h, m, s;
 	int i = 0, j = 0;
 
+	memset(mPrj->console,0,BUF_LEN);
+	sprintf(mPrj->console,"rm -rf %s/%s-%s.log",LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+	system(mPrj->console);
+
     for(;;) 
 	{
 		getLocalTime(&y,&mon,&d,&h,&m,&s);
@@ -152,14 +154,6 @@ static void *work_main_thread(void *args)
 			i = 0;
 			if(++j >= 6*2) { //120 min
 				j = 0;
-
-				parse_config(); //update config.
-
-				memset(mPrj->console,0,BUF_LEN);
-				sprintf(mPrj->console,"echo update-parse_config >> %s/%s-%s.log",LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
-				system(mPrj->console);
-				
-				//reset
 				if(mPrj->time_out) {
 					mPrj->time_out = 0;
 				}
@@ -167,14 +161,14 @@ static void *work_main_thread(void *args)
 		}
 		else {
 			memset(mPrj->console,0,BUF_LEN);
-		    sprintf(mPrj->console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } >>%s/%s-%s.log", 
-				y, mon, d, h, m, s,mPrj->h,mPrj->m,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
+		    sprintf(mPrj->console,"echo %04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } - %s >>%s/%s-%s.log", 
+				y, mon, d, h, m, s,mPrj->h,mPrj->m,mPrj->script,LOG_OUT_DIR,mPrj->prj_name,mPrj->build_type);
 
 			if(mPrj->is_daemon) {
 				system(mPrj->console);
 			}
 			else {
-				printf("%s\n", mPrj->console);
+				printf("%04d/%02d/%02d-%02d:%02d:%02d { %02d:%02d } - %s\n", y, mon, d, h, m, s,mPrj->h,mPrj->m,mPrj->script);
 			}
 		}
 
@@ -259,28 +253,21 @@ int parse_from_file(char *filename,int *hh, int *mm) {
 	return 0;
 }
 
-void parse_config(void) {
-    char *p = mPrj->pwd;
-	exec_system_call((char *)"pwd",p,BUF_LEN);
-	sprintf(mPrj->script,"%s/my-task.sh",p);
-    printf("wait exec: %s\n",mPrj->script);
-    parse_from_file(mPrj->script, &mPrj->h,&mPrj->m);
-}
-
-
 int parse_args(int argc, char **argv) {
 	int i;
 
 	memset(mPrj,0,sizeof(Project_info));
-	parse_config();
+	exec_system_call((char *)"pwd",mPrj->pwd,BUF_LEN);
 
 	for(i = 0; i < argc; i++) {
 		if(strcmp(argv[i],"-c") == 0) {
 			kill_proc((char*)"work_timerd");
+			return 1;
 		}
 		else
 		if(strcmp(argv[i],"-h") == 0) {
 			SHOW_HELP();
+			return 1;
 		}
 		else
 		if(strcmp(argv[i],"-d") == 0) {
@@ -304,6 +291,10 @@ int parse_args(int argc, char **argv) {
 		}
 	}
 
+	sprintf(mPrj->script, "%s/my-task.sh %s %s %s ",
+		mPrj->pwd,mPrj->prj_name,mPrj->build_type,mPrj->prj_path);
+
+	//printf("script: %s\n",mPrj->script);
 	return 0;
 }
 
@@ -320,11 +311,8 @@ int main(int argc,char *argv[])
 		return -1;
 	}
 
-	printf("init : \n\n%d,%s,%s,%s,%s,%02d:%02d,\n\n",
+	printf("init : \n\n%d,%s,%02d:%02d,\n\n",
 		mPrj->is_daemon,
-		mPrj->prj_name,
-		mPrj->build_type,
-		mPrj->prj_path,
 		mPrj->script,
 		mPrj->h,
 		mPrj->m);

@@ -26,7 +26,7 @@ if [ ! -d $root_dir/build-log ] ; then
 fi
 
 rm -rf $root_dir/build-log/everyday-build-$build_prj-$build_type.log 
-rm -rf $root_dir/build-log/$build_prj-$build_type.log
+#rm -rf $root_dir/build-log/$build_prj-$build_type.log
 
 echo "$build_prj | $build_type |$prj_path" >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 
@@ -44,7 +44,7 @@ echo "start make... " >> $root_dir/build-log/everyday-build-$build_prj-$build_ty
 
 make clean &&
 
-make -j8 2>&1 |tee build.log && 
+make BUILD_MYOS=yes -j8 2>&1 |tee build.log && 
 $root_dir/work/script/release.sh &&
 echo "--end-- " >> $root_dir/build-log/everyday-build-$build_prj-$build_type.log
 ###############################################################
